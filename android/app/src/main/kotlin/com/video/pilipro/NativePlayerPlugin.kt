@@ -41,8 +41,8 @@ class NativePlayerPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private lateinit var textureRegistry: TextureRegistry
 
     private var player: ExoPlayer? = null
-    private var textureEntry: TextureRegistry.SurfaceTextureEntry? = null
-    private var surfaceTexture: android.graphics.SurfaceTexture? = null
+    // Use SurfaceProducer for proper buffer management with Impeller
+    private var surfaceProducer: TextureRegistry.SurfaceProducer? = null
     private var surface: Surface? = null
     private var eventSink: EventChannel.EventSink? = null
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -182,15 +182,14 @@ class NativePlayerPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         audioUrl: String?,
         headers: Map<String, String>?
     ): Long {
-        // Dispose previous player if any
+        // Dispose previous player and surface
+        // Must release both to ensure proper texture recreation when switching videos
         disposePlayer()
 
-        // Create texture
-        textureEntry = textureRegistry.createSurfaceTexture()
-        surfaceTexture = textureEntry!!.surfaceTexture()
-        // 先设置默认缓冲区大小，避免初始为 0x0 导致灰块
-        surfaceTexture?.setDefaultBufferSize(1920, 1080)
-        surface = Surface(surfaceTexture)
+        // Create new SurfaceProducer for each player instance
+        // This ensures proper buffer lifecycle and prevents texture conflicts
+        surfaceProducer = textureRegistry.createSurfaceProducer()
+        surface = surfaceProducer!!.surface
 
         // HTTP data source factory with custom headers
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
@@ -268,7 +267,7 @@ class NativePlayerPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 if (playbackState == Player.STATE_READY) {
                     val videoSize = exoPlayer.videoSize
                     if (videoSize.width > 0 && videoSize.height > 0) {
-                        surfaceTexture?.setDefaultBufferSize(videoSize.width, videoSize.height)
+                        // SurfaceProducer handles buffer size automatically
                         sendEvent(
                             mapOf(
                                 "type" to "videoSize",
@@ -321,8 +320,7 @@ class NativePlayerPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             }
 
             override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
-                // 设置 SurfaceTexture 的缓冲区大小，否则视频会显示为小灰块
-                surfaceTexture?.setDefaultBufferSize(videoSize.width, videoSize.height)
+                // SurfaceProducer handles buffer size automatically, no need for manual sizing
                 sendEvent(
                     mapOf(
                         "type" to "videoSize",
@@ -339,7 +337,7 @@ class NativePlayerPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         // Start position updates
         mainHandler.post(positionUpdateRunnable)
 
-        return textureEntry!!.id()
+        return surfaceProducer!!.id()
     }
 
     private fun sendPositionUpdate() {
@@ -383,18 +381,25 @@ class NativePlayerPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         // This method is intentionally a no-op.
     }
     private fun disposePlayer() {
+        releaseExoPlayer()
+        releaseSurface()
+    }
+
+    private fun releaseExoPlayer() {
         mainHandler.removeCallbacks(positionUpdateRunnable)
         // Important: Clear surface from player BEFORE releasing player
         // This ensures buffers are returned to the queue
         player?.setVideoSurface(null)
         player?.release()
         player = null
-        // Important: Release surface before SurfaceTexture to avoid buffer leaks
+    }
+
+    private fun releaseSurface() {
+        // SurfaceProducer manages the surface internally, just release it
         surface?.release()
         surface = null
-        // Release the SurfaceTextureEntry which properly releases the SurfaceTexture
-        textureEntry?.release()
-        textureEntry = null
-        surfaceTexture = null
+        // Release the SurfaceProducer which properly handles buffer lifecycle
+        surfaceProducer?.release()
+        surfaceProducer = null
     }
 }

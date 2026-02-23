@@ -117,7 +117,6 @@ class _ZanButtonGrpcState extends State<ZanButtonGrpc> {
     HapticService.to.feedback(HapticType.heavyImpact);
 
     // 发送请求
-    final action = willDislike ? 2 : 0; // 2=点踩, 0=取消
     final res = await ReplyHttp.hateReply(
       type: widget.replyItem.type.toInt(),
       action: willDislike ? 1 : 0,

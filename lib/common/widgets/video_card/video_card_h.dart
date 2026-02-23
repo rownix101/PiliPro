@@ -67,9 +67,11 @@ class VideoCardH extends StatelessWidget {
     // 生成唯一的 heroTag 用于共享元素动画
     final String heroTag = Utils.makeHeroTag(videoItem.aid);
     final colorScheme = ColorScheme.of(context);
-    return Material(
-      type: MaterialType.transparency,
-      child: Stack(
+    // 使用 RepaintBoundary 隔离重绘，优化滚动性能
+    return RepaintBoundary(
+      child: Material(
+        type: MaterialType.transparency,
+        child: Stack(
         clipBehavior: Clip.none,
         children: [
           InkWell(
@@ -217,6 +219,7 @@ class VideoCardH extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }

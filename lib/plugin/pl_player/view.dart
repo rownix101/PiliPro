@@ -149,6 +149,8 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    maxWidth = widget.maxWidth;
+    maxHeight = widget.maxHeight;
 
     _controlsListener = plPlayerController.showControls.listen((bool val) {
       final visible = val && !plPlayerController.controlsLock.value;
@@ -259,6 +261,17 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   }
 
   @override
+  void didUpdateWidget(covariant PLVideoPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 当屏幕旋转导致尺寸变化时，更新 maxWidth 和 maxHeight
+    if (oldWidget.maxWidth != widget.maxWidth ||
+        oldWidget.maxHeight != widget.maxHeight) {
+      maxWidth = widget.maxWidth;
+      maxHeight = widget.maxHeight;
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!plPlayerController.continuePlayInBackground.value) {
       if (const [
@@ -319,14 +332,15 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     }
     transformationController.dispose();
     _removeDmAction();
-    // 先释放纹理让 Texture widget 停止渲染，再释放播放器资源
+    // 先释放纹理让 Texture widget 停止渲染
     // 避免 Texture widget 还在渲染时 SurfaceTexture 被释放导致缓冲区泄漏
-    plPlayerController.releaseTexture();
-    // 使用 postFrameCallback 在下一帧渲染完成后释放播放器资源
-    // 确保 Texture widget 已经从渲染树中移除
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      PlPlayerController.updatePlayCount();
-    });
+    try {
+      plPlayerController.releaseTexture();
+    } catch (e) {
+      // 忽略已关闭的 Rx 变量异常
+    }
+    // 注意：updatePlayCount() 现在在 VideoDetailPageV.dispose() 中调用
+    // 避免页面跳转时错误地释放播放器资源
     super.dispose();
   }
 
@@ -1465,6 +1479,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                 translation: isFullScreen
                     ? const Offset(0.0, 1.2)
                     : const Offset(0.0, 0.8),
+                // 合并 Obx：同时监听 isSliderMoving、sliderTempPosition 和 duration
                 child: Obx(
                   () => AnimatedOpacity(
                     curve: Curves.easeInOut,
@@ -1486,27 +1501,22 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                         mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Obx(() {
-                            return Text(
-                              DurationUtils.formatDuration(
-                                plPlayerController
-                                    .sliderTempPosition
-                                    .value
-                                    .inSeconds,
-                              ),
-                              style: textStyle,
-                            );
-                          }),
+                          // 使用同一个 Obx 的响应值
+                          Text(
+                            DurationUtils.formatDuration(
+                              plPlayerController
+                                  .sliderTempPosition
+                                  .value
+                                  .inSeconds,
+                            ),
+                            style: textStyle,
+                          ),
                           const Text('/', style: textStyle),
-                          Obx(
-                            () {
-                              return Text(
-                                DurationUtils.formatDuration(
-                                  plPlayerController.duration.value.inSeconds,
-                                ),
-                                style: textStyle,
-                              );
-                            },
+                          Text(
+                            DurationUtils.formatDuration(
+                              plPlayerController.duration.value.inSeconds,
+                            ),
+                            style: textStyle,
                           ),
                         ],
                       ),
@@ -1921,8 +1931,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                         semanticLabel: "加载中",
                         color: Colors.white,
                       ),
+                      // 合并 Obx：bufferedSeconds 已在父级 Obx 中监听
                       if (plPlayerController.isBuffering.value)
-                        Obx(() {
+                        Builder(builder: (context) {
                           if (plPlayerController.bufferedSeconds.value == 0) {
                             return const Text(
                               '加载中...',
@@ -2031,67 +2042,72 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   Widget get _videoWidget {
     return Container(
       clipBehavior: Clip.none,
-      width: maxWidth,
-      height: maxHeight,
+      width: widget.maxWidth,
+      height: widget.maxHeight,
       color: widget.fill,
+      // 合并 Obx：将视频渲染相关状态合并到一个 Obx 中
       child: Obx(
-        () => MouseInteractiveViewer(
-          scaleEnabled: !plPlayerController.controlsLock.value,
-          pointerSignalFallback: _onPointerSignal,
-          onPointerPanZoomUpdate: _onPointerPanZoomUpdate,
-          onPointerPanZoomEnd: _onPointerPanZoomEnd,
-          onPointerDown: _onPointerDown,
-          onInteractionStart: _onInteractionStart,
-          onInteractionUpdate: _onInteractionUpdate,
-          onInteractionEnd: _onInteractionEnd,
-          panEnabled: false,
-          minScale: plPlayerController.enableShrinkVideoSize ? 0.75 : 1,
-          maxScale: 2.0,
-          boundaryMargin: plPlayerController.enableShrinkVideoSize
-              ? const EdgeInsets.all(double.infinity)
-              : EdgeInsets.zero,
-          panAxis: PanAxis.aligned,
-          transformationController: transformationController,
-          onTranslate: () {
-            final storage = transformationController.value.storage;
-            showRestoreScaleBtn.value =
-                storage[12].abs() > 2.0 ||
-                storage[13].abs() > 2.0 ||
-                storage[0] != 1.0;
-          },
-          childKey: _videoKey,
-          child: RepaintBoundary(
-            key: _videoKey,
-            child: Obx(
-              () {
-                final videoFit = plPlayerController.videoFit.value;
-                final textureId = plPlayerController.textureId;
-                final videoWidth = plPlayerController.width.value;
-                final videoHeight = plPlayerController.height.value;
-                if (textureId == null) {
-                  return const SizedBox.shrink();
-                }
-                return Transform.flip(
-                  flipX: plPlayerController.flipX.value,
-                  flipY: plPlayerController.flipY.value,
-                  child: FittedBox(
-                    fit: videoFit.boxFit,
-                    alignment: widget.alignment,
-                    child: SizedBox(
-                      width: videoWidth != null && videoWidth > 0
-                          ? videoWidth.toDouble()
-                          : widget.maxWidth * 2,
-                      height: videoHeight != null && videoHeight > 0
-                          ? videoHeight.toDouble()
-                          : widget.maxHeight * 2,
-                      child: Texture(textureId: textureId),
+        () {
+          final controlsLock = plPlayerController.controlsLock.value;
+          final videoFit = plPlayerController.videoFit.value;
+          final textureId = plPlayerController.textureId;
+          final videoWidth = plPlayerController.width.value;
+          final videoHeight = plPlayerController.height.value;
+          final flipX = plPlayerController.flipX.value;
+          final flipY = plPlayerController.flipY.value;
+
+          return MouseInteractiveViewer(
+            scaleEnabled: !controlsLock,
+            pointerSignalFallback: _onPointerSignal,
+            onPointerPanZoomUpdate: _onPointerPanZoomUpdate,
+            onPointerPanZoomEnd: _onPointerPanZoomEnd,
+            onPointerDown: _onPointerDown,
+            onInteractionStart: _onInteractionStart,
+            onInteractionUpdate: _onInteractionUpdate,
+            onInteractionEnd: _onInteractionEnd,
+            panEnabled: false,
+            minScale: plPlayerController.enableShrinkVideoSize ? 0.75 : 1,
+            maxScale: 2.0,
+            boundaryMargin: plPlayerController.enableShrinkVideoSize
+                ? const EdgeInsets.all(double.infinity)
+                : EdgeInsets.zero,
+            panAxis: PanAxis.aligned,
+            transformationController: transformationController,
+            onTranslate: () {
+              final storage = transformationController.value.storage;
+              showRestoreScaleBtn.value =
+                  storage[12].abs() > 2.0 ||
+                  storage[13].abs() > 2.0 ||
+                  storage[0] != 1.0;
+            },
+            childKey: _videoKey,
+            child: RepaintBoundary(
+              key: _videoKey,
+              child: textureId == null
+                  ? const SizedBox.shrink()
+                  : Transform.flip(
+                      flipX: flipX,
+                      flipY: flipY,
+                      child: FittedBox(
+                        fit: videoFit.boxFit,
+                        alignment: widget.alignment,
+                        child: SizedBox(
+                          width: videoWidth != null && videoWidth > 0
+                              ? videoWidth.toDouble()
+                              : widget.maxWidth * 2,
+                          height: videoHeight != null && videoHeight > 0
+                              ? videoHeight.toDouble()
+                              : widget.maxHeight * 2,
+                          child: Texture(
+                            key: ValueKey('texture_$textureId'),
+                            textureId: textureId,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                );
-              },
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

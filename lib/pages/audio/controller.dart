@@ -62,10 +62,10 @@ class AudioController extends GetxController
 
   final Rx<DetailItem?> audioItem = Rx<DetailItem?>(null);
 
-  @override
   NativePlayer? player;
 
   /// 兼容 BlockMixin 的 plPlayer getter
+  @override
   PlPlayerController? get plPlayer => null;
 
   bool _isPlaying = false;

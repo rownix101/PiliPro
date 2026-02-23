@@ -77,8 +77,10 @@ class VideoCardV extends StatelessWidget {
     
     // 生成唯一的 heroTag 用于共享元素动画
     final String heroTag = Utils.makeHeroTag(videoItem.aid);
-    
-    return Stack(
+
+    // 使用 RepaintBoundary 隔离重绘，优化滚动性能
+    return RepaintBoundary(
+      child: Stack(
       clipBehavior: Clip.none,
       children: [
         Card(
@@ -142,7 +144,8 @@ class VideoCardV extends StatelessWidget {
               onRemove: onRemove,
             ),
           ),
-      ],
+        ],
+      ),
     );
   }
 

@@ -187,8 +187,6 @@ class PlPlayerController with BlockConfigMixin {
   ///
   final RxBool isSliderMoving = false.obs;
 
-  /// 是否循环
-  PlaylistMode _looping = PlaylistMode.none;
   bool _autoPlay = false;
 
   // 记录历史记录
@@ -237,7 +235,14 @@ class PlPlayerController with BlockConfigMixin {
 
   /// 释放纹理（在 dispose 前调用，确保 Texture widget 先停止渲染）
   void releaseTexture() {
-    _textureIdRx.value = null;
+    // 避免在 dispose 后调用时抛出异常
+    try {
+      _textureIdRx.value = null;
+    } catch (_) {
+      // Rx 变量可能已关闭，忽略异常
+    }
+    // 注意：不要在这里暂停播放器
+    // 页面返回时会通过 playerInit 重新初始化，暂停会导致状态混乱
   }
 
   bool isMuted = false;
@@ -670,7 +675,6 @@ class PlPlayerController with BlockConfigMixin {
       this.height.value = height;
       this.dataSource = dataSource;
       _autoPlay = autoplay;
-      _looping = looping;
       // 初始化视频倍速
       // _playbackSpeed.value = speed;
       // 初始化数据加载状态
@@ -855,8 +859,6 @@ class PlPlayerController with BlockConfigMixin {
       }
     }
     getVideoFit();
-    // if (_looping) {
-    //   await setLooping(_looping);
     // }
 
     // 跳转播放
@@ -899,6 +901,8 @@ class PlPlayerController with BlockConfigMixin {
   void startListeners() {
     final player = _nativePlayer;
     if (player == null) return;
+    // 如果已被释放，不添加监听器
+    if (_isDisposed || _playerCount == 0) return;
     subscriptions = {
       player.events.listen((event) {
         switch (event.type) {
@@ -1010,20 +1014,33 @@ class PlPlayerController with BlockConfigMixin {
             break;
         }
       }),
-      // 媒体通知监听
-      if (videoPlayerServiceHandler != null) ...[
-        playerStatus.listen((PlayerStatus event) {
-          videoPlayerServiceHandler!.onStatusChange(
-            event,
-            isBuffering.value,
-            isLive,
-          );
-        }),
-        positionSeconds.listen((int event) {
-          videoPlayerServiceHandler!.onPositionChange(Duration(seconds: event));
-        }),
-      ],
+      // 媒体通知监听已移至下方（带异常保护）
     };
+    // 使用 try-catch 保护媒体通知监听，避免 Rx 变量已关闭时抛出异常
+    if (videoPlayerServiceHandler != null) {
+      try {
+        subscriptions.add(
+          playerStatus.listen((PlayerStatus event) {
+            videoPlayerServiceHandler!.onStatusChange(
+              event,
+              isBuffering.value,
+              isLive,
+            );
+          }),
+        );
+      } catch (_) {
+        // Rx 变量可能已关闭，忽略
+      }
+      try {
+        subscriptions.add(
+          positionSeconds.listen((int event) {
+            videoPlayerServiceHandler!.onPositionChange(Duration(seconds: event));
+          }),
+        );
+      } catch (_) {
+        // Rx 变量可能已关闭，忽略
+      }
+    }
   }
 
   /// 移除事件监听
@@ -1099,12 +1116,12 @@ class PlPlayerController with BlockConfigMixin {
   Future<void> setPlaybackSpeed(double speed) async {
     lastPlaybackSpeed = playbackSpeed;
 
-    if (false) { // native player doesn't expose current rate
-      return;
-    }
-
     await _nativePlayer?.setSpeed(speed);
-    _playbackSpeed.value = speed;
+    try {
+      _playbackSpeed.value = speed;
+    } catch (_) {
+      // Rx 变量可能已关闭，忽略异常
+    }
     if (danmakuController != null) {
       try {
         DanmakuOption currentOption = danmakuController!.option;

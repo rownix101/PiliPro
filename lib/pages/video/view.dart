@@ -44,6 +44,7 @@ import 'package:PiliPro/pages/video/widgets/player_focus.dart';
 import 'package:PiliPro/plugin/pl_player/controller.dart';
 import 'package:PiliPro/plugin/pl_player/models/fullscreen_mode.dart';
 import 'package:PiliPro/plugin/pl_player/models/play_repeat.dart';
+import 'package:PiliPro/plugin/pl_player/models/data_status.dart';
 import 'package:PiliPro/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPro/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPro/plugin/pl_player/view.dart';
@@ -96,6 +97,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   late final UgcIntroController ugcIntroController;
   late final PgcIntroController pgcIntroController;
   late final LocalIntroController localIntroController;
+
+  // 防止 didPopNext 中的初始化逻辑被重复执行
+  bool _isReinitializing = false;
 
   bool get autoExitFullscreen =>
       videoDetailController.plPlayerController.autoExitFullscreen;
@@ -169,7 +173,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   Future<void> videoSourceInit() async {
     // 视频页面连接预热（不等待，异步执行）
     ConnectionWarmupService().warmupForVideoPage();
-    
+
     videoDetailController.queryVideoUrl();
     if (videoDetailController.autoPlay) {
       plPlayerController = videoDetailController.plPlayerController;
@@ -182,7 +186,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   void positionListener(Duration position) {
     videoDetailController.playedTime = position;
-    
+
     // 首帧检测：当 position > 0 且封面仍未隐藏时，通知 FirstFrameInterceptor
     if (position.inMilliseconds > 0) {
       firstFrameInterceptorKey.currentState?.onFirstFrameRendered();
@@ -220,7 +224,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   }
 
   Future<void>? playCallBack() {
-    return plPlayerController?.play();
+    // 使用最新的 plPlayerController 引用
+    // 因为从其他视频页面返回时，控制器实例可能被重新初始化
+    final controller = videoDetailController.plPlayerController;
+    return controller.play();
   }
 
   // 播放器状态监听
@@ -371,8 +378,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       videoPlayerServiceHandler?.onVideoDetailDispose(heroTag);
       if (plPlayerController != null) {
         videoDetailController.makeHeartBeat();
-        plPlayerController!.dispose();
-      } else {
+        // 页面关闭时减少播放器引用计数
+        // 注意：不要在 PLVideoPlayer.dispose() 中调用，避免页面跳转时错误释放
         PlPlayerController.updatePlayCount();
       }
     }
@@ -411,6 +418,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         ..removeStatusLister(playerListener)
         ..removePositionListener(positionListener)
         ..pause();
+      // 释放 texture，让 Texture widget 停止渲染
+      // 避免当新视频创建新 texture 时产生冲突
+      plPlayerController?.releaseTexture();
     }
     isShowing = false;
     super.didPushNext();
@@ -423,6 +433,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       videoDetailController.imageview = false;
       return;
     }
+
+    // 更新 plPlayerController 引用，确保它指向正确的单例实例
+    // 因为从其他视频页面返回时，播放器单例可能已被重新初始化
+    plPlayerController = videoDetailController.plPlayerController;
 
     if (plPlayerController?.isCloseAll == true) {
       return;
@@ -459,21 +473,60 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       }
     }
 
-    () async {
-      if (videoDetailController.autoPlay) {
-        await videoDetailController.playerInit(
-          autoplay: videoDetailController.playerStatus?.isPlaying ?? false,
-        );
-      } else if (videoDetailController.plPlayerController.preInitPlayer &&
-          !videoDetailController.isQuerying &&
-          videoDetailController.videoState.value is! Error) {
-        await videoDetailController.playerInit();
-      }
+    // 延迟一帧执行初始化，确保 Texture widget 先被销毁
+    // 避免在重建过程中创建新的 SurfaceProducer 导致竞争条件
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || !isShowing) return;
-      plPlayerController
-        ?..addStatusLister(playerListener)
-        ..addPositionListener(positionListener);
-    }();
+
+      // 防止重复初始化
+      if (_isReinitializing) return;
+      _isReinitializing = true;
+
+      try {
+        // 检查当前播放器是否正在播放当前视频
+        // 如果播放器已经在播放当前视频，不需要重新初始化
+        final isPlayingCurrentVideo =
+            plPlayerController?.cid == videoDetailController.cid.value &&
+            plPlayerController?.dataStatus.value == DataStatus.loaded;
+
+        // 当从其他视频页面返回时，需要重新初始化播放器
+        // 因为播放器实例被共享，其他视频可能已改变播放器状态
+        final needReinit =
+            !isPlayingCurrentVideo &&
+            videoDetailController.videoState.value is Success &&
+            !videoDetailController.isQuerying &&
+            (videoDetailController.isFileSource ||
+                videoDetailController.videoUrl != null);
+
+        if (needReinit) {
+          // 从其他视频页面返回，需要重新初始化播放器
+          // 只有当用户之前正在播放 且 开启了自动播放设置时才继续播放
+          // 这样可以尊重用户的自动播放偏好设置
+          final wasPlaying =
+              videoDetailController.playerStatus == PlayerStatus.playing;
+          final shouldPlay = wasPlaying && autoPlayEnable;
+          await videoDetailController.playerInit(
+            autoplay: shouldPlay,
+          );
+          // 注意：不需要在这里调用 play()，playerInit 内部会根据 autoplay 参数处理
+        } else if (isPlayingCurrentVideo) {
+          // 播放器已经在播放当前视频，只需恢复监听器
+          // 恢复之前的播放状态（同样需要考虑自动播放设置）
+          final wasPlaying =
+              videoDetailController.playerStatus == PlayerStatus.playing;
+          if (wasPlaying && autoPlayEnable) {
+            if (!mounted || !isShowing) return;
+            await videoDetailController.plPlayerController.play();
+          }
+        }
+        if (!mounted || !isShowing) return;
+        plPlayerController
+          ?..addStatusLister(playerListener)
+          ..addPositionListener(positionListener);
+      } finally {
+        _isReinitializing = false;
+      }
+    });
 
     super.didPopNext();
   }
@@ -843,10 +896,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                                         if (plPlayerController!
                                             .playerStatus
                                             .isCompleted) {
-                                          await plPlayerController!
-                                              .seekTo(Duration.zero, isSeek: false);
-                                          plPlayerController!
-                                              .play();
+                                          await plPlayerController!.seekTo(
+                                            Duration.zero,
+                                            isSeek: false,
+                                          );
+                                          plPlayerController!.play();
                                         } else {
                                           plPlayerController!
                                               .onDoubleTapCenter();
@@ -1361,40 +1415,46 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         (videoDetailController.horizontalScreen || isPortrait),
     onPopInvokedWithResult: _onPopInvokedWithResult,
     child: Obx(
-      () =>
-          videoDetailController.videoState.value is! Success ||
-              !videoDetailController.autoPlay ||
-              plPlayerController?.videoController == null
-          ? const SizedBox.shrink()
-          : PLVideoPlayer(
-              maxWidth: width,
-              maxHeight: height,
-              plPlayerController: plPlayerController!,
-              videoDetailController: videoDetailController,
-              introController: introController,
-              headerControl: HeaderControl(
-                key: videoDetailController.headerCtrKey,
-                isPortrait: isPortrait,
-                controller: videoDetailController.plPlayerController,
-                videoDetailCtr: videoDetailController,
-                heroTag: heroTag,
-              ),
-              danmuWidget: isPipMode && pipNoDanmaku
-                  ? null
-                  : Obx(
-                      () => PlDanmaku(
-                        key: ValueKey(videoDetailController.cid.value),
-                        isPipMode: isPipMode,
-                        cid: videoDetailController.cid.value,
-                        playerController: plPlayerController!,
-                        isFullScreen: plPlayerController!.isFullScreen.value,
-                        isFileSource: videoDetailController.isFileSource,
-                        size: Size(width, height),
-                      ),
-                    ),
-              showEpisodes: showEpisodes,
-              showViewPoints: showViewPoints,
-            ),
+      () {
+        // 监听 videoController (textureId) 的变化
+        // 确保当播放器重新初始化后 UI 能够重建
+        final videoController = plPlayerController?.videoController;
+        // 只要 videoController (textureId) 不为 null 就显示播放器
+        // 不再依赖 autoPlay，因为返回页面时 autoPlay 可能为 false
+        if (videoDetailController.videoState.value is! Success ||
+            videoController == null) {
+          return const SizedBox.shrink();
+        }
+        return PLVideoPlayer(
+          maxWidth: width,
+          maxHeight: height,
+          plPlayerController: plPlayerController!,
+          videoDetailController: videoDetailController,
+          introController: introController,
+          headerControl: HeaderControl(
+            key: videoDetailController.headerCtrKey,
+            isPortrait: isPortrait,
+            controller: videoDetailController.plPlayerController,
+            videoDetailCtr: videoDetailController,
+            heroTag: heroTag,
+          ),
+          danmuWidget: isPipMode && pipNoDanmaku
+              ? null
+              : Obx(
+                  () => PlDanmaku(
+                    key: ValueKey(videoDetailController.cid.value),
+                    isPipMode: isPipMode,
+                    cid: videoDetailController.cid.value,
+                    playerController: plPlayerController!,
+                    isFullScreen: plPlayerController!.isFullScreen.value,
+                    isFileSource: videoDetailController.isFileSource,
+                    size: Size(width, height),
+                  ),
+                ),
+          showEpisodes: showEpisodes,
+          showViewPoints: showViewPoints,
+        );
+      },
     ),
   );
 
@@ -1595,7 +1655,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   Widget videoPlayer({required double width, required double height}) {
     final isFullScreen = this.isFullScreen;
-    
+
     // 构建播放器内容
     Widget playerContent = Stack(
       clipBehavior: Clip.none,
@@ -1750,7 +1810,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         ),
       ],
     );
-    
+
     // 使用 Hero 动画包装播放器区域，实现共享元素过渡
     // 在自动播放模式下，使用首帧拦截避免黑屏闪烁
     if (videoDetailController.autoPlay) {
@@ -1761,7 +1821,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         child: playerContent,
       );
     }
-    
+
     return Hero(
       tag: heroTag,
       transitionOnUserGestures: true,

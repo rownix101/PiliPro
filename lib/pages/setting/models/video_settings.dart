@@ -1,22 +1,15 @@
-import 'dart:io';
-
 import 'package:PiliPro/models_new/common/video/audio_quality.dart';
 import 'package:PiliPro/models_new/common/video/cdn_type.dart';
 import 'package:PiliPro/models_new/common/video/live_quality.dart';
 import 'package:PiliPro/models_new/common/video/video_decode_type.dart';
 import 'package:PiliPro/models_new/common/video/video_quality.dart';
 import 'package:PiliPro/pages/setting/models/model.dart';
-import 'package:PiliPro/pages/setting/widgets/ordered_multi_select_dialog.dart';
-import 'package:PiliPro/pages/setting/widgets/select_dialog.dart';
 import 'package:PiliPro/pages/setting/widgets/select_dialog.dart';
 import 'package:PiliPro/utils/storage.dart';
 import 'package:PiliPro/utils/storage_key.dart';
 import 'package:PiliPro/utils/storage_pref.dart';
 import 'package:PiliPro/utils/video_utils.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show FilteringTextInputFormatter;
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
