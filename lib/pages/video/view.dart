@@ -374,13 +374,31 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     if (!videoDetailController.horizontalScreen) {
       AutoOrientation.portraitUpMode();
     }
-    if (!videoDetailController.plPlayerController.isCloseAll) {
+
+    // 处理播放器销毁
+    final isNavigatingToHome =
+        !Get.previousRoute.startsWith('/video') &&
+        !Get.previousRoute.startsWith('/liveRoom');
+    if (isNavigatingToHome) {
+      // 返回首页时强制销毁播放器
       videoPlayerServiceHandler?.onVideoDetailDispose(heroTag);
       if (plPlayerController != null) {
         videoDetailController.makeHeartBeat();
-        // 页面关闭时减少播放器引用计数
-        // 注意：不要在 PLVideoPlayer.dispose() 中调用，避免页面跳转时错误释放
-        PlPlayerController.updatePlayCount();
+        // 强制销毁播放器，不管引用计数
+        PlPlayerController.instance?.isCloseAll = true;
+        PlPlayerController.instance?.dispose();
+      }
+    } else {
+      // 检查播放器是否已被标记为完全关闭
+      final shouldDispose =
+          PlPlayerController.instance?.isCloseAll != true;
+      if (shouldDispose) {
+        videoPlayerServiceHandler?.onVideoDetailDispose(heroTag);
+        if (plPlayerController != null) {
+          videoDetailController.makeHeartBeat();
+          // 页面关闭时减少播放器引用计数
+          PlPlayerController.updatePlayCount();
+        }
       }
     }
     PageUtils.routeObserver.unsubscribe(this);
@@ -431,6 +449,22 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   void didPopNext() {
     if (videoDetailController.imageview) {
       videoDetailController.imageview = false;
+      return;
+    }
+
+    // 如果是从其他视频页面返回，直接回到首页
+    // 避免播放器重新初始化失败的问题
+    if (Get.previousRoute.startsWith('/video')) {
+      // 先销毁播放器，停止视频播放
+      // 直接调用 dispose 强制销毁播放器
+      videoDetailController.makeHeartBeat();
+      PlPlayerController.instance?.dispose();
+      // 延迟执行导航，避免与当前路由冲突
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Get.until((route) => route.isFirst);
+        }
+      });
       return;
     }
 
