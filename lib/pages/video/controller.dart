@@ -121,8 +121,10 @@ class VideoDetailController extends GetxController
   final videoPlayerKey = GlobalKey();
   final childKey = GlobalKey<ScaffoldState>();
 
-  final plPlayerController = PlPlayerController.getInstance()
-    ..brightness.value = -1;
+  // 使用 getter 动态获取播放器实例，确保在单例被销毁后能获取新实例
+  PlPlayerController get plPlayerController =>
+      PlPlayerController.getInstance();
+
   bool get setSystemBrightness => plPlayerController.setSystemBrightness;
 
   late VideoItem firstVideo;
