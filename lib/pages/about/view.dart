@@ -11,14 +11,14 @@ import 'package:PiliPro/services/logger.dart';
 import 'package:PiliPro/utils/accounts.dart';
 import 'package:PiliPro/utils/accounts/account.dart';
 import 'package:PiliPro/utils/cache_manager.dart';
-import 'package:PiliPro/utils/date_utils.dart';
+
 import 'package:PiliPro/utils/extension/context_ext.dart';
 import 'package:PiliPro/utils/extension/num_ext.dart';
 import 'package:PiliPro/utils/login_utils.dart';
 import 'package:PiliPro/utils/page_utils.dart';
 import 'package:PiliPro/utils/platform_utils.dart';
 import 'package:PiliPro/utils/storage.dart';
-import 'package:PiliPro/utils/update.dart';
+
 import 'package:PiliPro/utils/utils.dart';
 import 'package:flutter/material.dart' hide ListTile;
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -140,7 +140,6 @@ class _AboutPageState extends State<AboutPage> {
             ),
           ),
           ListTile(
-            onTap: () => Update.checkUpdate(false),
             onLongPress: () => Utils.copyText(currentVersion),
             onSecondaryTap: PlatformUtils.isMobile
                 ? null
@@ -151,22 +150,6 @@ class _AboutPageState extends State<AboutPage> {
               currentVersion,
               style: subTitleStyle,
             ),
-          ),
-          ListTile(
-            title: Text(
-              '''
-Build Time: ${DateFormatUtils.format(BuildConfig.buildTime, format: DateFormatUtils.longFormatDs)}
-Commit Hash: ${BuildConfig.commitHash}''',
-              style: const TextStyle(fontSize: 14),
-            ),
-            leading: const Icon(Icons.info_outline),
-            onTap: () => PageUtils.launchURL(
-              '${Constants.sourceCodeUrl}/commit/${BuildConfig.commitHash}',
-            ),
-            onLongPress: () => Utils.copyText(BuildConfig.commitHash),
-            onSecondaryTap: PlatformUtils.isMobile
-                ? null
-                : () => Utils.copyText(BuildConfig.commitHash),
           ),
           Divider(
             thickness: 1,

@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:PiliPro/build_config.dart';
+
 import 'package:PiliPro/common/constants.dart';
 import 'package:PiliPro/common/widgets/custom_toast.dart';
 import 'package:PiliPro/common/widgets/scale_app.dart';
@@ -14,7 +14,7 @@ import 'package:PiliPro/services/download/download_service.dart';
 import 'package:PiliPro/services/service_locator.dart';
 import 'package:PiliPro/utils/app_scheme.dart';
 import 'package:PiliPro/utils/cache_manager.dart';
-import 'package:PiliPro/utils/date_utils.dart';
+
 import 'package:PiliPro/utils/extension/iterable_ext.dart';
 import 'package:PiliPro/utils/extension/theme_ext.dart';
 import 'package:PiliPro/utils/json_file_handler.dart';
@@ -153,11 +153,6 @@ void main() async {
 
   if (Pref.enableLog) {
     // 异常捕获 logo记录
-    final customParameters = {
-      'BuildConfig':
-          '\nBuild Time: ${DateFormatUtils.format(BuildConfig.buildTime, format: DateFormatUtils.longFormatDs)}\n'
-          'Commit Hash: ${BuildConfig.commitHash}',
-    };
     final fileHandler = await JsonFileHandler.init();
     final Catcher2Options debugConfig = Catcher2Options(
       SilentReportMode(),
@@ -166,19 +161,17 @@ void main() async {
         ConsoleHandler(
           enableDeviceParameters: false,
           enableApplicationParameters: false,
-          enableCustomParameters: true,
+          enableCustomParameters: false,
         ),
       ],
-      customParameters: customParameters,
     );
 
     final Catcher2Options releaseConfig = Catcher2Options(
       SilentReportMode(),
       [
         ?fileHandler,
-        ConsoleHandler(enableCustomParameters: true),
+        ConsoleHandler(enableCustomParameters: false),
       ],
-      customParameters: customParameters,
     );
 
     Catcher2(

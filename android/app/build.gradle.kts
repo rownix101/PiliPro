@@ -39,10 +39,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // 3. 性能优化：仅编译 arm64-v8a，显著缩小包体积
-        ndk {
-            abiFilters.add("arm64-v8a")
-        }
+        // 3. 性能优化：使用 --split-per-abi 构建时，不要设置 abiFilters
     }
 
     // 4. 签名配置

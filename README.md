@@ -19,9 +19,9 @@
     <h1>PiliPro</h1>
 <div align="center">
     
-![GitHub repo size](https://img.shields.io/github/repo-size/bggRGjQaUbCoE/PiliPro) 
-![GitHub Repo stars](https://img.shields.io/github/stars/bggRGjQaUbCoE/PiliPro) 
-![GitHub all releases](https://img.shields.io/github/downloads/bggRGjQaUbCoE/PiliPro/total) 
+![GitHub repo size](https://img.shields.io/github/repo-size/rownix101/PiliPro) 
+![GitHub Repo stars](https://img.shields.io/github/stars/rownix101/PiliPro) 
+![GitHub all releases](https://img.shields.io/github/downloads/rownix101/PiliPro/total) 
 </div>
     <p>使用Flutter开发的BiliBili第三方客户端</p>
     
@@ -226,6 +226,106 @@
 
 可以通过右侧release进行下载或拉取代码到本地进行编译
 
+## 构建
+
+### 环境要求
+- Flutter 3.41.0+ (推荐使用 [FVM](https://fvm.app) 管理)
+- Dart SDK >=3.10.0
+
+### 快速开始
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/rownix101/PiliPro.git
+cd PiliPro
+
+# 2. 安装依赖
+flutter pub get
+
+# 3. 运行（开发模式）
+flutter run
+```
+
+### 生产构建
+
+#### Android
+
+```bash
+# 开发构建
+flutter build apk --debug
+
+# 发布构建（分架构）
+flutter build apk --release --split-per-abi
+
+# 带自定义配置构建
+flutter build apk --release --split-per-abi --dart-define-from-file=pili_release.json
+```
+
+#### iOS
+
+```bash
+# 构建
+flutter build ios --release
+
+# 导出IPA（需要配置签名）
+flutter build ipa --release
+```
+
+### 配置文件
+
+项目使用 **两种配置文件** 分别管理版本信息和API密钥：
+
+#### 1. API密钥配置（用户创建）
+
+存储敏感的API密钥：
+
+```bash
+# 1. 复制示例文件
+cp pili_config_example.json pili_release_config.json
+
+# 2. 填入你的API密钥
+{
+  "BILI_APP_KEY": "your_app_key_here",
+  "BILI_APP_SECRET": "your_app_secret_here"
+}
+```
+
+**使用方式：**
+- **自动注入**：使用 `build.ps1` 脚本时会自动合并API密钥
+- **手动构建**：
+  ```bash
+  flutter build apk --release --dart-define-from-file=pili_release_config.json
+  ```
+
+#### 2. 版本信息配置（可选）
+
+构建时可以通过 `--dart-define` 指定版本信息：
+
+```bash
+# 构建时指定版本
+flutter build apk --release --split-per-abi --dart-define=pili.name=1.0.0 --dart-define=pili.code=1
+```
+
+**说明**：
+- `pili.name` - 版本名称（显示在关于页面）
+- `pili.code` - 版本号（Android内部版本号）
+
+#### ⚠️ 安全提醒
+
+以下文件已被添加到 `.gitignore`，**请勿提交到版本控制**：
+- `pili_release_config.json` - API密钥
+- `*.env` - 环境变量文件
+
+### 代码检查
+
+```bash
+# 代码分析
+flutter analyze
+
+# 代码格式化
+dart format .
+```
+
 <br/>
 
 ## 声明
@@ -253,12 +353,4 @@
 <br/>
 <br/>
 
-## Star History
 
-<a href="https://www.star-history.com/#bggRGjQaUbCoE/PiliPro&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=bggRGjQaUbCoE/PiliPro&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=bggRGjQaUbCoE/PiliPro&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=bggRGjQaUbCoE/PiliPro&type=Date" />
- </picture>
-</a>
