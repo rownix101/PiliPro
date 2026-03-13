@@ -78,6 +78,57 @@ The project uses a PowerShell script (`lib/scripts/build.ps1`) to set build-time
 
 These are accessed via `BuildConfig` class in `lib/build_config.dart`.
 
+### Configuration Files
+
+The project supports external configuration files for build-time variables (API keys, etc.).
+
+**There are two types of configuration files:**
+
+#### 1. Version Info (Auto-generated)
+The `lib/scripts/build.ps1` script automatically generates:
+- `pili_release.json` - Contains version name, code, hash, and build timestamp
+
+**Do not manually edit this file** - it's regenerated on each build.
+
+#### 2. API Keys (User-created)
+Create your own configuration file for sensitive API credentials:
+
+**Setup:**
+```bash
+# 1. Copy example config
+cp pili_config_example.json pili_release_config.json
+
+# 2. Edit pili_release_config.json with your API keys
+{
+  "BILI_APP_KEY": "your_app_key_here",
+  "BILI_APP_SECRET": "your_app_secret_here"
+}
+```
+
+**Automatic Injection (via build.ps1):**
+When using the PowerShell build script, API keys are automatically merged:
+```bash
+# Script reads pili_release_config.json and merges with version info
+# into pili_release.json
+.\lib\scripts\build.ps1
+```
+
+**Manual Build:**
+```bash
+# You can also inject directly
+dart-define BILI_APP_KEY=your_key BILI_APP_SECRET=your_secret
+
+# Or use a config file
+flutter build apk --release --dart-define-from-file=pili_release_config.json
+```
+
+**Important:** Configuration files are excluded from git (see `.gitignore`):
+- `pili_release.json` - Auto-generated, contains version info
+- `pili_release_config.json` - User API keys
+- `*.env` - Environment files
+
+These files may contain sensitive information and should NOT be committed to version control.
+
 ---
 
 ## Project Structure

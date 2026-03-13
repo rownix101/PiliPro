@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-
-if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then
-    echo "Stopping PiliPro if running..."
-    pkill -x pilipro || true
-fi
-
-exit 0

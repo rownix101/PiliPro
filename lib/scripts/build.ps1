@@ -37,6 +37,18 @@ try {
         'pili.time' = $buildTime
     }
 
+    # 如果存在用户配置文件，合并API Key
+    $configFile = 'pili_release_config.json'
+    if (Test-Path $configFile) {
+        $userConfig = Get-Content $configFile -Encoding UTF8 | ConvertFrom-Json
+        if ($userConfig.'BILI_APP_KEY') {
+            $data.'BILI_APP_KEY' = $userConfig.'BILI_APP_KEY'
+        }
+        if ($userConfig.'BILI_APP_SECRET') {
+            $data.'BILI_APP_SECRET' = $userConfig.'BILI_APP_SECRET'
+        }
+    }
+
     $data | ConvertTo-Json -Compress | Out-File 'pili_release.json' -Encoding UTF8
 
     Add-Content -Path $env:GITHUB_ENV -Value "version=$versionName+$versionCode"

@@ -20,12 +20,5 @@ abstract final class PathUtils {
   static const danmakuName = 'danmaku.pb';
   static const downloadDir = 'download';
 
-  static String buildShadersAbsolutePath(
-    String baseDirectory,
-    List<String> shaders,
-  ) {
-    return shaders
-        .map((shader) => path.join(baseDirectory, shader))
-        .join(Platform.isWindows ? ';' : ':');
-  }
+
 }

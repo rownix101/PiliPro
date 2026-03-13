@@ -19,19 +19,16 @@ import 'package:get/get.dart';
 
 abstract final class LoginUtils {
   static FutureOr setWebCookie([Account? account]) {
-    if (Platform.isLinux) {
-      return null;
-    }
+    // 桌面端支持已停止，此方法仅在Android/iOS上使用
     final cookies = (account ?? Accounts.main).cookieJar.toList();
     final webManager = web.CookieManager.instance(
       webViewEnvironment: webViewEnvironment,
     );
-    final isWindows = Platform.isWindows;
     return Future.wait(
       cookies.map(
         (cookie) => webManager.setCookie(
           url: web.WebUri(
-            '${isWindows ? 'https://' : ''} ${cookie.domain}',
+            'https://${cookie.domain}',
           ),
           name: cookie.name,
           value: cookie.value,
@@ -81,10 +78,10 @@ abstract final class LoginUtils {
       ..isLogin.value = false;
 
     return Future.wait([
-      if (!Platform.isLinux)
-        web.CookieManager.instance(
-          webViewEnvironment: webViewEnvironment,
-        ).deleteAllCookies(),
+      // 桌面端支持已停止，所有平台都清除cookie
+      web.CookieManager.instance(
+        webViewEnvironment: webViewEnvironment,
+      ).deleteAllCookies(),
       GStorage.userInfo.delete('userInfoCache'),
     ]);
   }

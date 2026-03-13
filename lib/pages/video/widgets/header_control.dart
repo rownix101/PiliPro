@@ -1191,13 +1191,11 @@ class HeaderControlState extends State<HeaderControl>
                           );
                           String name =
                               '${introController.videoDetail.value.title}-${videoDetailCtr.bvid}-${videoDetailCtr.cid.value}-${item.lanDoc}.json';
-                          if (Platform.isWindows) {
-                            // Reserved characters may not be used in file names. See: https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions
-                            name = name.replaceAll(
-                              RegExp(r'[<>:/\\|?*"]'),
-                              '',
-                            );
-                          }
+                          // 清理文件名中的非法字符（适用于所有平台）
+                          name = name.replaceAll(
+                            RegExp(r'[<>:/\\|?*"]'),
+                            '',
+                          );
                           Utils.saveBytes2File(
                             name: name,
                             bytes: bytes,

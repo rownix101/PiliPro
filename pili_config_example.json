@@ -1,0 +1,5 @@
+{
+  "_comment": "此文件用于存储敏感的API密钥，不要提交到git",
+  "BILI_APP_KEY": "your_app_key_here",
+  "BILI_APP_SECRET": "your_app_secret_here"
+}

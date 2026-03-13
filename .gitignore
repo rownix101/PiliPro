@@ -142,8 +142,19 @@ devtools_options.yaml
 # FVM Version Cache
 .fvm/
 
+# 构建配置文件（包含敏感信息如API Key）
 pili_release.json
+pili_release_config.json
+pili_*.json
 
+# 但保留示例配置文件
+!pili_config_example.json
+
+*.env
+.env.local
+.env.production
+
+# 分发目录
 dist
 
 test.dart
