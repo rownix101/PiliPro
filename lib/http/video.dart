@@ -67,7 +67,8 @@ abstract final class VideoHttp {
             (i['owner'] != null &&
                 !GlobalData().blackMids.contains(i['owner']['mid']))) {
           RecVideoItemModel videoItem = RecVideoItemModel.fromJson(i);
-          if (!RecommendFilter.filter(videoItem)) {
+          // 使用智能过滤（自动识别新人UP并应用宽松条件）
+          if (!RecommendFilter.smartFilter(videoItem)) {
             list.add(videoItem);
           }
         }
@@ -147,7 +148,8 @@ abstract final class VideoHttp {
             continue;
           }
           RecVideoItemAppModel videoItem = RecVideoItemAppModel.fromJson(i);
-          if (!RecommendFilter.filter(videoItem)) {
+          // 使用智能过滤（自动识别新人UP并应用宽松条件）
+          if (!RecommendFilter.smartFilter(videoItem)) {
             list.add(videoItem);
           }
         }

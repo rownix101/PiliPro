@@ -10,6 +10,7 @@ class Owner implements BaseOwner {
     this.mid,
     this.name,
     this.face,
+    this.followers,
   });
   @HiveField(0)
   @override
@@ -19,11 +20,15 @@ class Owner implements BaseOwner {
   String? name;
   @HiveField(2)
   String? face;
+  @HiveField(3)
+  @override
+  int? followers;
 
   Owner.fromJson(Map<String, dynamic> json) {
     mid = Utils.safeToInt(json["mid"]);
     name = json["name"];
     face = json['face'];
+    followers = Utils.safeToInt(json['fans'] ?? json['follower'] ?? 0);
   }
 
   Map<String, dynamic> toJson() => {

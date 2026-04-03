@@ -46,7 +46,12 @@ class _RcmdPageState extends CommonPageState<RcmdPage, RcmdController>
             slivers: [
               SliverPadding(
                 padding: const .only(top: StyleString.cardSpace, bottom: 100),
-                sliver: Obx(() => _buildBody(controller.loadingState.value, onSurfaceVariant)),
+                sliver: Obx(
+                  () => _buildBody(
+                    controller.loadingState.value,
+                    onSurfaceVariant,
+                  ),
+                ),
               ),
             ],
           ),
@@ -63,7 +68,10 @@ class _RcmdPageState extends CommonPageState<RcmdPage, RcmdController>
     mainAxisExtent: MediaQuery.textScalerOf(context).scale(90),
   );
 
-  Widget _buildBody(LoadingState<List<dynamic>?> loadingState, Color onSurfaceVariant) {
+  Widget _buildBody(
+    LoadingState<List<dynamic>?> loadingState,
+    Color onSurfaceVariant,
+  ) {
     return switch (loadingState) {
       Loading() => _buildSkeleton,
       Success(:final response) =>
@@ -100,23 +108,14 @@ class _RcmdPageState extends CommonPageState<RcmdPage, RcmdController>
                         : index;
                     return VideoCardV(
                       videoItem: response[actualIndex],
-                      onRemove: () {
-                        if (controller.lastRefreshAt != null &&
-                            actualIndex < controller.lastRefreshAt!) {
-                          controller.lastRefreshAt =
-                              controller.lastRefreshAt! - 1;
-                        }
-                        controller.loadingState
-                          ..value.data!.removeAt(actualIndex)
-                          ..refresh();
-                      },
+                      onRemove: () => controller.removeRecommendationAt(
+                        actualIndex,
+                      ),
                     );
                   } else {
                     return VideoCardV(
                       videoItem: response[index],
-                      onRemove: () => controller.loadingState
-                        ..value.data!.removeAt(index)
-                        ..refresh(),
+                      onRemove: () => controller.removeRecommendationAt(index),
                     );
                   }
                 },

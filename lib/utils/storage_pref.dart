@@ -21,6 +21,7 @@ import 'package:PiliPro/models_new/common/video/live_quality.dart';
 import 'package:PiliPro/models_new/common/video/subtitle_pref_type.dart';
 import 'package:PiliPro/models_new/common/video/video_decode_type.dart';
 import 'package:PiliPro/models_new/common/video/video_quality.dart';
+import 'package:PiliPro/models_new/model_video.dart';
 import 'package:PiliPro/models_new/user/danmaku_rule.dart';
 import 'package:PiliPro/models_new/user/info.dart';
 import 'package:PiliPro/plugin/pl_player/models/bottom_progress_behavior.dart';
@@ -45,6 +46,10 @@ abstract final class Pref {
   static final Box _setting = GStorage.setting;
   static final Box _video = GStorage.video;
   static final Box _localCache = GStorage.localCache;
+  static final RegExp _recommendTitleNoise = RegExp(
+    r'[^\u4e00-\u9fa5a-z0-9]+',
+    caseSensitive: false,
+  );
 
   static UserInfoData? get userInfoCache =>
       GStorage.userInfo.get('userInfoCache');
@@ -594,12 +599,265 @@ abstract final class Pref {
   static int get minLikeRatioForRecommend =>
       _setting.get(SettingBoxKey.minLikeRatioForRecommend, defaultValue: 0);
 
+  static List<String> get recentRecommendationVideoKeys => List<String>.from(
+    _localCache.get(
+      LocalCacheKey.recentRecommendationVideoKeys,
+      defaultValue: const <String>[],
+    ),
+  );
+
+  static List<int> get recentRecommendationOwnerIds => List<int>.from(
+    _localCache.get(
+      LocalCacheKey.recentRecommendationOwnerIds,
+      defaultValue: const <int>[],
+    ),
+  );
+
+  static List<String> get recentRecommendationTitleFingerprints =>
+      List<String>.from(
+        _localCache.get(
+          LocalCacheKey.recentRecommendationTitleFingerprints,
+          defaultValue: const <String>[],
+        ),
+      );
+
+  static List<String> get skippedRecommendationVideoKeys => List<String>.from(
+    _localCache.get(
+      LocalCacheKey.skippedRecommendationVideoKeys,
+      defaultValue: const <String>[],
+    ),
+  );
+
+  static List<int> get skippedRecommendationOwnerIds => List<int>.from(
+    _localCache.get(
+      LocalCacheKey.skippedRecommendationOwnerIds,
+      defaultValue: const <int>[],
+    ),
+  );
+
+  static List<String> get skippedRecommendationTitleFingerprints =>
+      List<String>.from(
+        _localCache.get(
+          LocalCacheKey.skippedRecommendationTitleFingerprints,
+          defaultValue: const <String>[],
+        ),
+      );
+
+  static String recommendationVideoKey(BaseVideoItemModel item) {
+    if (item.bvid?.isNotEmpty == true) {
+      return 'bvid:${item.bvid}';
+    }
+    if (item.aid != null) {
+      return 'aid:${item.aid}';
+    }
+    if (item.cid != null) {
+      return 'cid:${item.cid}';
+    }
+    return '';
+  }
+
+  static String recommendationTitleFingerprint(String title) {
+    final normalized = title
+        .toLowerCase()
+        .replaceAll(_recommendTitleNoise, ' ')
+        .trim();
+    if (normalized.isEmpty) {
+      return '';
+    }
+    final tokens = normalized
+        .split(RegExp(r'\s+'))
+        .where((token) => token.length >= 2)
+        .take(4)
+        .toList();
+    if (tokens.isEmpty) {
+      return normalized.length > 12 ? normalized.substring(0, 12) : normalized;
+    }
+    return tokens.join(' ');
+  }
+
+  static Future<void> rememberRecommendationBatch(
+    Iterable<BaseVideoItemModel> items, {
+    int limit = 40,
+  }) async {
+    final videoKeys = <String>[];
+    final ownerIds = <int>[];
+    final titleFingerprints = <String>[];
+
+    for (final item in items.take(limit)) {
+      final key = recommendationVideoKey(item);
+      if (key.isNotEmpty) {
+        videoKeys.add(key);
+      }
+      final ownerId = item.owner.mid;
+      if (ownerId != null && ownerId > 0) {
+        ownerIds.add(ownerId);
+      }
+      final fingerprint = recommendationTitleFingerprint(item.title);
+      if (fingerprint.isNotEmpty) {
+        titleFingerprints.add(fingerprint);
+      }
+    }
+
+    await _localCache.put(
+      LocalCacheKey.recentRecommendationVideoKeys,
+      _mergeRecent(videoKeys, recentRecommendationVideoKeys, 160),
+    );
+    await _localCache.put(
+      LocalCacheKey.recentRecommendationOwnerIds,
+      _mergeRecent(ownerIds, recentRecommendationOwnerIds, 120),
+    );
+    await _localCache.put(
+      LocalCacheKey.recentRecommendationTitleFingerprints,
+      _mergeRecent(
+        titleFingerprints,
+        recentRecommendationTitleFingerprints,
+        120,
+      ),
+    );
+  }
+
+  static Future<void> markRecommendationSkipped(BaseVideoItemModel item) async {
+    final key = recommendationVideoKey(item);
+    final ownerId = item.owner.mid;
+    final fingerprint = recommendationTitleFingerprint(item.title);
+
+    if (key.isNotEmpty) {
+      await _localCache.put(
+        LocalCacheKey.skippedRecommendationVideoKeys,
+        _mergeRecent([key], skippedRecommendationVideoKeys, 80),
+      );
+    }
+    if (ownerId != null && ownerId > 0) {
+      await _localCache.put(
+        LocalCacheKey.skippedRecommendationOwnerIds,
+        _mergeRecent([ownerId], skippedRecommendationOwnerIds, 80),
+      );
+    }
+    if (fingerprint.isNotEmpty) {
+      await _localCache.put(
+        LocalCacheKey.skippedRecommendationTitleFingerprints,
+        _mergeRecent([fingerprint], skippedRecommendationTitleFingerprints, 80),
+      );
+    }
+  }
+
   static bool get exemptFilterForFollowed =>
       _setting.get(SettingBoxKey.exemptFilterForFollowed, defaultValue: true);
 
   static bool get applyFilterToRelatedVideos => _setting.get(
     SettingBoxKey.applyFilterToRelatedVideos,
     defaultValue: true,
+  );
+
+  // ========== 新人UP扶持设置 ==========
+  static bool get enableNewCreatorBoost => _setting.get(
+    SettingBoxKey.enableNewCreatorBoost,
+    defaultValue: true, // 默认开启新人扶持
+  );
+
+  static int get newCreatorMaxFollowers => _setting.get(
+    SettingBoxKey.newCreatorMaxFollowers,
+    defaultValue: 5000, // 粉丝少于5000视为新人UP
+  );
+
+  static int get newCreatorMinDuration => _setting.get(
+    SettingBoxKey.newCreatorMinDuration,
+    defaultValue: 15, // 新人UP视频最低15秒（普通是30秒）
+  );
+
+  static int get newCreatorMinPlay => _setting.get(
+    SettingBoxKey.newCreatorMinPlay,
+    defaultValue: 10, // 新人UP最低10播放量（普通是50/100）
+  );
+
+  static int get newCreatorMinLikeRatio => _setting.get(
+    SettingBoxKey.newCreatorMinLikeRatio,
+    defaultValue: 1, // 新人UP最低1%点赞率（普通是2-4%）
+  );
+
+  // ========== 探索模式设置 ==========
+  static bool get enableExplorationMode => _setting.get(
+    SettingBoxKey.enableExplorationMode,
+    defaultValue: true,
+  );
+
+  static double get explorationRatio => _setting.get(
+    SettingBoxKey.explorationRatio,
+    defaultValue: 0.20, // 默认20%内容用于探索小众/新人
+  );
+
+  // ========== 多样性配额设置 ==========
+  static bool get enableDiversityQuota => _setting.get(
+    SettingBoxKey.enableDiversityQuota,
+    defaultValue: true,
+  );
+
+  static double get nicheContentRatio => _setting.get(
+    SettingBoxKey.nicheContentRatio,
+    defaultValue: 0.15, // 15%小众内容配额
+  );
+
+  // ========== 质量评分设置 ==========
+  static bool get enableQualityScoring => _setting.get(
+    SettingBoxKey.enableQualityScoring,
+    defaultValue: true,
+  );
+
+  static double get engagementWeight => _setting.get(
+    SettingBoxKey.engagementWeight,
+    defaultValue: 0.4, // 互动率权重40%
+  );
+
+  static double get depthWeight => _setting.get(
+    SettingBoxKey.depthWeight,
+    defaultValue: 0.3, // 深度指标权重30%
+  );
+
+  static double get freshnessWeight => _setting.get(
+    SettingBoxKey.freshnessWeight,
+    defaultValue: 0.3, // 时效性权重30%
+  );
+
+  // ========== 负向过滤设置 ==========
+  static bool get enableNegativeFilter => _setting.get(
+    SettingBoxKey.enableNegativeFilter,
+    defaultValue: true,
+  );
+
+  static int get clickbaitPenalty => _setting.get(
+    SettingBoxKey.clickbaitPenalty,
+    defaultValue: 30, // 默认30%惩罚
+  );
+
+  static bool get filterShortViral => _setting.get(
+    SettingBoxKey.filterShortViral,
+    defaultValue: true,
+  );
+
+  static bool get filterSuspiciousEngagement => _setting.get(
+    SettingBoxKey.filterSuspiciousEngagement,
+    defaultValue: true,
+  );
+
+  // ========== 时长权重设置 ==========
+  static bool get enableDurationWeight => _setting.get(
+    SettingBoxKey.enableDurationWeight,
+    defaultValue: true,
+  );
+
+  static int get shortVideoThreshold => _setting.get(
+    SettingBoxKey.shortVideoThreshold,
+    defaultValue: 180, // 3分钟
+  );
+
+  static int get longVideoThreshold => _setting.get(
+    SettingBoxKey.longVideoThreshold,
+    defaultValue: 480, // 8分钟
+  );
+
+  static bool get exemptNewCreatorFromDuration => _setting.get(
+    SettingBoxKey.exemptNewCreatorFromDuration,
+    defaultValue: true, // 新人UP豁免时长限制
   );
 
   static bool get enableBackgroundPlay =>
@@ -936,7 +1194,27 @@ abstract final class Pref {
     return null;
   }
 
-  static Future<void> setDnsCacheData(List<Map<String, dynamic>> cacheData) async {
+  static Future<void> setDnsCacheData(
+    List<Map<String, dynamic>> cacheData,
+  ) async {
     await _localCache.put(LocalCacheKey.dnsCacheData, cacheData);
+  }
+
+  static List<T> _mergeRecent<T>(
+    Iterable<T> newest,
+    Iterable<T> existing,
+    int maxItems,
+  ) {
+    final merged = <T>[];
+    final seen = <T>{};
+    for (final item in newest.followedBy(existing)) {
+      if (seen.add(item)) {
+        merged.add(item);
+      }
+      if (merged.length >= maxItems) {
+        break;
+      }
+    }
+    return merged;
   }
 }

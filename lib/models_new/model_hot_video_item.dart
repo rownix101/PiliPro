@@ -61,10 +61,6 @@ class HotVideoItemModel extends BaseRecVideoItemModel with MultiSelectData {
 }
 
 class HotStat extends Stat {
-  int? reply;
-  int? favorite;
-  num? coin;
-  int? share;
   int? nowRank;
   int? hisRank;
   int? dislike;
@@ -72,10 +68,7 @@ class HotStat extends Stat {
   int? vv;
 
   HotStat.fromJson(Map<String, dynamic> json) : super.fromJson(json) {
-    reply = json["reply"];
-    favorite = json["favorite"];
-    coin = json['coin'];
-    share = json["share"];
+    // reply, favorite, coin, share已在BaseStat中定义
     nowRank = json["now_rank"];
     hisRank = json['his_rank'];
     dislike = json["dislike"];

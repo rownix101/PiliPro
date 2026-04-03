@@ -55,6 +55,22 @@ class RcmdStat extends BaseStat {
   RcmdStat.fromJson(Map<String, dynamic> json) {
     view = NumUtils.parseNum(json["cover_left_text_1"] ?? '');
     danmu = NumUtils.parseNum(json["cover_left_text_2"] ?? '');
+    // App端推荐API在这些字段上信息有限
+    like = json['like'] != null
+        ? NumUtils.parseNum(json['like'].toString())
+        : null;
+    coin = json['coin'] != null
+        ? NumUtils.parseNum(json['coin'].toString())
+        : null;
+    favorite = json['favorite'] != null
+        ? NumUtils.parseNum(json['favorite'].toString())
+        : null;
+    reply = json['reply'] != null
+        ? NumUtils.parseNum(json['reply'].toString())
+        : null;
+    share = json['share'] != null
+        ? NumUtils.parseNum(json['share'].toString())
+        : null;
   }
 }
 
@@ -64,6 +80,12 @@ class RcmdOwner extends BaseOwner {
         ? (json['args']?['up_name'] ?? '')
         : (json['desc_button']?['text'] ?? '');
     mid = json['args']?['up_id'] ?? 0;
+    // App端推荐API通常不直接返回粉丝数，设为null表示未知
+    // 可在后续通过UP主详情API补充
+    final fansStr = json['args']?['up_fans']?.toString();
+    followers = fansStr != null && fansStr.isNotEmpty
+        ? NumUtils.parseNum(fansStr)
+        : null;
   }
 }
 
